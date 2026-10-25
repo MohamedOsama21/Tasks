@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Manager</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 60px 16px;
+    }
+    .card {
+      background: #fff;
+      width: 100%;
+      max-width: 420px;
+      padding: 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    h2 { margin: 0 0 20px; font-size: 24px; text-align: center; }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    input:focus { outline: none; border-color: #3b82f6; }
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: #3b82f6;
+    }
+    button:hover { opacity: 0.9; }
+    .btn-secondary { background: #64748b; }
+    .btn-danger { background: #ef4444; padding: 6px 12px; font-size: 13px; }
+    .row { display: flex; gap: 8px; }
+    .row input { margin-bottom: 0; }
+    .row button { white-space: nowrap; }
+    #auth .row button { flex: 1; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .header h2 { margin: 0; text-align: left; }
+    ul { list-style: none; padding: 0; margin: 20px 0 0; }
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .empty { text-align: center; color: #94a3b8; padding: 12px; }
+    #msg { text-align: center; margin: 16px 0 0; min-height: 20px; font-size: 14px; }
+    .ok { color: #16a34a; }
+    .err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <div id="auth">
+      <h2>Task Manager</h2>
+      <input id="username" placeholder="Username">
+      <input id="password" type="password" placeholder="Password">
+      <div class="row">
+        <button onclick="login()">Login</button>
+        <button class="btn-secondary" onclick="register()">Register</button>
+      </div>
+    </div>
+
+    <div id="app" style="display:none">
+      <div class="header">
+        <h2>My Tasks</h2>
+        <button class="btn-secondary" onclick="logout()">Logout</button>
+      </div>
+      <div class="row">
+        <input id="title" placeholder="New task">
+        <button onclick="addTask()">Add</button>
+      </div>
+      <ul id="list"></ul>
+    </div>
+
+    <p id="msg"></p>
+  </div>
+
+<script>
+async function call(url, method, data) {
+  const opts = { method, headers: {} };
+  if (data) {
+    opts.body = new URLSearchParams(data);
+  }
+  const r = await fetch(url, opts);
+  return { ok: r.ok, body: await r.json() };
+}
+
+function show(text, ok) {
+  const m = document.getElementById('msg');
+  m.innerText = text || '';
+  m.className = ok ? 'ok' : 'err';
+}
+
+function creds() {
+  return {
+    username: document.getElementById('username').value,
+    password: document.getElementById('password').value
+  };
+}
+
+async function register() {
+  const r = await call('/api/register.php', 'POST', creds());
+  show(r.body.message || r.body.error, r.ok);
+}
+
+async function login() {
+  const r = await call('/api/login.php', 'POST', creds());
+  show(r.body.message || r.body.error, r.ok);
+  if (r.ok) {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadTasks();
+  }
+}
+
+function logout() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth').style.display = 'block';
+  document.getElementById('password').value = '';
+  show('', true);
+}
+
+async function loadTasks() {
+  const r = await call('/api/tasks.php', 'GET');
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  if (r.body.length === 0) {
+    list.innerHTML = '<div class="empty">No tasks yet</div>';
+    return;
+  }
+  r.body.forEach(t => {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.textContent = t.title;
+    const b = document.createElement('button');
+    b.textContent = 'Delete';
+    b.className = 'btn-danger';
+    b.onclick = () => deleteTask(t.id);
+    li.appendChild(span);
+    li.appendChild(b);
+    list.appendChild(li);
+  });
+}
+
+async function addTask() {
+  const title = document.getElementById('title').value;
+  if (!title.trim()) return;
+  await call('/api/tasks.php', 'POST', { title });
+  document.getElementById('title').value = '';
+  loadTasks();
+}
+
+async function deleteTask(id) {
+  await call('/api/tasks.php', 'DELETE', { id });
+  loadTasks();
+}
+</script>
+</body>
+</html>
