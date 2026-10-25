@@ -56,3 +56,93 @@ intentionally simple; the focus is the infrastructure around it.
    (stateless backend).
 7. cAdvisor measures every container, Prometheus stores the metrics, and
    Grafana displays them.
+
+## Getting Started
+
+### Prerequisites
+
+- Docker Engine and Docker Compose v2
+- Ports `8081` (application) and `3000` (Grafana) available
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/MohamedOsama21/Tasks.git
+cd Tasks
+```
+
+### 2. Create the environment file and secrets
+
+Real credentials are never committed. Copy the examples and set your own values:
+
+```bash
+cp .env.example .env
+cp -r secrets.example secrets
+```
+
+Edit the two files in `secrets/` and replace the placeholder passwords.
+The files must contain the password only, with no trailing newline:
+
+```bash
+printf '%s' 'YourRootPassword' > secrets/db_root_password.txt
+printf '%s' 'YourUserPassword' > secrets/db_password.txt
+chmod 644 secrets/db_password.txt
+```
+
+`db_password.txt` must be readable by the `www-data` user inside the backend
+container, which is why it uses mode `644`.
+
+### 3. Start the stack
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+All containers should be `Up`, and `db` and `redis` should be `(healthy)`.
+
+### 4. Open the services
+
+| Service | URL |
+|---|---|
+| Application | http://localhost:8081 |
+| Grafana | http://localhost:3000 (default login `admin` / `admin`) |
+
+In Grafana, add a Prometheus data source with the URL `http://prometheus:9090`,
+then import dashboard ID `14282`.
+
+## Verifying the Setup
+
+Check that Nginx routes to the right containers:
+
+```bash
+curl -s http://localhost:8081/ | head -3
+curl -s -X POST -d "username=x&password=x" http://localhost:8081/api/login.php
+```
+
+The first returns HTML (frontend), the second returns JSON (backend).
+
+Check network isolation (Nginx must not reach the database):
+
+```bash
+docker compose exec nginx getent hosts db        # no output
+docker compose exec backend getent hosts db      # returns an IP
+```
+
+Check that sessions are stored in Redis, not in the backend containers:
+
+```bash
+docker compose exec redis redis-cli keys 'PHPREDIS_SESSION*'
+```
+
+Check the secret is mounted as a file and not exposed as a variable:
+
+```bash
+docker inspect task-manager-backend-1 | grep -i password
+```
+
+Check resource limits:
+
+```bash
+docker stats --no-stream
+```
